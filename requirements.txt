@@ -5,3 +5,5 @@ pypdf
 python-docx
 requests
 beautifulsoup4
+streamlit
+chromadb>=1.5.5

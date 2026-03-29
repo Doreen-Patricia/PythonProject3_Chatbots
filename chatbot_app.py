@@ -1,52 +1,81 @@
-import os
 import streamlit as st
-from document_loader import load_documents
-from embed_documents import split_text
-from chromadb import Client
-
-# Ensure DB folder exists
-if not os.path.exists("./db"):
-    os.makedirs("./db")
-
-# Initialize Chroma client
-client = Client(persist_directory="./db", settings={})
-
-# Define collection
-collection_name = "knowledge_collection"
-if collection_name in [c.name for c in client.list_collections()]:
-    collection = client.get_collection(name=collection_name)
-else:
-    collection = client.create_collection(name=collection_name)
+import chromadb
+from sentence_transformers import SentenceTransformer
 
 # -----------------------------
-# BUILD DATABASE
+# LOAD MODEL
 # -----------------------------
-if "db_loaded" not in st.session_state:
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    existing_data = collection.count()
+# -----------------------------
+# CONNECT TO DATABASE
+# -----------------------------
+client = chromadb.PersistentClient(path="chroma_db")
+collection = client.get_collection(name="knowledge_base")
 
-    if existing_data == 0:
-        st.write("🔄 Loading and embedding documents...")
+# -----------------------------
+# PAGE TITLE
+# -----------------------------
+st.title("📚 Enabled Talent Chatbot")
 
-        documents = load_documents("knowledge_documents")
+# -----------------------------
+# STEP 1: INITIAL GREETING
+# -----------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "Hello! 👋 My name is Study Buddies, Enabled Talent Assistant.\n\nI can help you with inclusive hiring, workplace accessibility, and disability employment guidelines.\n\nHow can I assist you today?"
+        }
+    ]
 
-        chunks = []
-        ids = []
+# -----------------------------
+# STEP 2: DISPLAY CHAT HISTORY
+# -----------------------------
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-        for i, doc in enumerate(documents):
-            for j, chunk in enumerate(split_text(doc)):
-                chunks.append(chunk)
-                ids.append(f"{i}_{j}")
+# -----------------------------
+# STEP 3: USER INPUT (IMPORTANT)
+# -----------------------------
+if prompt := st.chat_input("Ask a question about inclusive hiring..."):
 
-        if len(chunks) > 0:
-            collection.add(
-                documents=chunks,
-                ids=ids
-            )
+    # Save user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-        st.write("✅ Documents loaded successfully!")
+    # Display user message
+    with st.chat_message("user"):
+        st.write(prompt)
 
+    # -----------------------------
+    # STEP 4: QUERY VECTOR DATABASE
+    # -----------------------------
+    query_embedding = model.encode(prompt).tolist()
+
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3
+    )
+
+    docs = results["documents"][0]
+
+    # -----------------------------
+    # STEP 5: GENERATE RESPONSE
+    # -----------------------------
+    if docs:
+        response = "Here is what I found from the documents:\n\n"
+
+        for doc in docs:
+            clean_doc = doc.strip().replace("\n", " ")
+
+            response += "• " + clean_doc[:350] + "...\n\n"
     else:
-        st.write("✅ Database already initialized")
+        response = "Sorry, I could not find relevant information in the documents."
 
-    st.session_state.db_loaded = True
+    # Save chatbot response
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+    # Display chatbot response
+    with st.chat_message("assistant"):
+        st.write(response)
