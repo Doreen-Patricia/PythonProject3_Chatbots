@@ -1,7 +1,5 @@
-from turtle import st
-
 from document_loader import load_documents
-from embed_documents import split_text, collection
+from embed_documents import split_text
 
 # -----------------------------
 # BUILD DATABASE (FOR CLOUD)
