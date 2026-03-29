@@ -1,33 +1,28 @@
+import os
 import streamlit as st
 from document_loader import load_documents
 from embed_documents import split_text
-from chromadb import Client  # if using ChromaDB
-from chromadb.config import Settings
+from chromadb import Client
 
-# -----------------------------
-# SETUP VECTOR DATABASE
-# -----------------------------
-# Initialize Chroma client (or your DB of choice)
-client = Client(Settings(
-    chroma_db_impl="duckdb+parquet",  # local storage
-    persist_directory="./db"           # where your DB will be saved
-))
+# Ensure DB folder exists
+if not os.path.exists("./db"):
+    os.makedirs("./db")
 
-# Define a collection for your documents
+# Initialize Chroma client
+client = Client(persist_directory="./db", settings={})
+
+# Define collection
 collection_name = "knowledge_collection"
-
-# Check if the collection exists, else create
 if collection_name in [c.name for c in client.list_collections()]:
     collection = client.get_collection(name=collection_name)
 else:
     collection = client.create_collection(name=collection_name)
 
 # -----------------------------
-# BUILD DATABASE (FOR CLOUD) ✅
+# BUILD DATABASE
 # -----------------------------
 if "db_loaded" not in st.session_state:
 
-    # Check if collection already has data
     existing_data = collection.count()
 
     if existing_data == 0:
